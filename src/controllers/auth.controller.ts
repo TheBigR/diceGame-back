@@ -23,6 +23,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       username: user.username,
     });
 
+    console.log(`New user registered: ${username}`);
     res.status(201).json({
       token,
       user: {
@@ -58,6 +59,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error: any) {
+    console.log(`Login attempt failed for username: ${req.body.username}`);
     res.status(401).json({ error: error.message });
   }
 };

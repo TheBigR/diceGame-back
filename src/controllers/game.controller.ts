@@ -150,3 +150,35 @@ export const newGame = async (req: AuthRequest, res: Response): Promise<void> =>
   }
 };
 
+export const deleteGame = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { gameId } = req.params;
+    const game = gameService.getGame(gameId);
+
+    if (!game) {
+      res.status(404).json({ error: 'Game not found' });
+      return;
+    }
+
+    // Verify user is part of the game
+    if (game.player1.userId !== req.user.userId && game.player2.userId !== req.user.userId) {
+      res.status(403).json({ error: 'You are not part of this game' });
+      return;
+    }
+
+    const deleted = gameService.deleteGame(gameId);
+    if (deleted) {
+      res.status(200).json({ message: 'Game deleted successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to delete game' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+

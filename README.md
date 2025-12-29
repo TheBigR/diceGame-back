@@ -32,6 +32,7 @@ npm install
 PORT=3000
 JWT_SECRET=your-secret-key-change-this-in-production
 NODE_ENV=development
+DB_PATH=./data/dice-game.db  # Optional: custom database path
 ```
 
 3. Build the project:
@@ -48,6 +49,18 @@ Or run in development mode with auto-reload:
 ```bash
 npm run dev
 ```
+
+## Database
+
+The application uses **SQLite** for persistent storage. The database file is automatically created in the `data/` directory on first run.
+
+- **Database location**: `./data/dice-game.db` (or path specified in `DB_PATH` env variable)
+- **Auto-initialization**: The database schema is automatically created on server start
+- **Persistence**: All users and games are saved to disk and persist across server restarts
+
+The database includes:
+- `users` table: Stores user accounts with hashed passwords
+- `games` table: Stores all game states and progress
 
 ## API Endpoints
 
@@ -88,6 +101,9 @@ All game endpoints require authentication (Bearer token in Authorization header)
 - `POST /api/games/:gameId/new-game` - Start a new game (reset current game)
   - Body: `{ "winningScore": number (optional) }`
   - Returns: Game state object
+
+- `DELETE /api/games/:gameId` - Delete a game
+  - Returns: `{ "message": "Game deleted successfully" }`
 
 ## Game State Structure
 

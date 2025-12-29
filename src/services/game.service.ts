@@ -1,14 +1,61 @@
 import { GameState, Player, DiceRoll, RollDiceResponse, HoldResponse } from '../types';
+import db from '../db/database';
+
+// Helper functions to convert between DB format and GameState
+function dbRowToGameState(row: any): GameState {
+  return {
+    id: row.id,
+    player1: {
+      id: row.player1_id,
+      userId: row.player1_id.split('-').slice(1).join('-'), // Extract userId from player id
+      username: row.player1_username,
+    },
+    player2: {
+      id: row.player2_id,
+      userId: row.player2_id.split('-').slice(1).join('-'),
+      username: row.player2_username,
+    },
+    currentPlayerId: row.current_player_id,
+    player1Score: row.player1_score,
+    player2Score: row.player2_score,
+    player1RoundScore: row.player1_round_score,
+    player2RoundScore: row.player2_round_score,
+    winningScore: row.winning_score,
+    status: row.status as 'waiting' | 'active' | 'finished',
+    winnerId: row.winner_id || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function gameStateToDbRow(game: GameState): any {
+  return {
+    id: game.id,
+    player1_id: game.player1.id,
+    player1_username: game.player1.username,
+    player2_id: game.player2.id,
+    player2_username: game.player2.username,
+    current_player_id: game.currentPlayerId,
+    player1_score: game.player1Score,
+    player2_score: game.player2Score,
+    player1_round_score: game.player1RoundScore,
+    player2_round_score: game.player2RoundScore,
+    winning_score: game.winningScore,
+    status: game.status,
+    winner_id: game.winnerId || null,
+    created_at: game.createdAt,
+    updated_at: game.updatedAt,
+  };
+}
 
 export class GameService {
-  private games: Map<string, GameState> = new Map();
-
   createGame(
     player1: Player,
     player2: Player,
     winningScore: number = 100
   ): GameState {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
     
     const gameState: GameState = {
       id: gameId,
@@ -21,30 +68,196 @@ export class GameService {
       player2RoundScore: 0,
       winningScore,
       status: 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
 
-    this.games.set(gameId, gameState);
+    const row = gameStateToDbRow(gameState);
+    const insert = db.prepare(`
+      INSERT INTO games (
+        id, player1_id, player1_username, player2_id, player2_username,
+        current_player_id, player1_score, player2_score,
+        player1_round_score, player2_round_score, winning_score,
+        status, winner_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    insert.run(
+      row.id,
+      row.player1_id,
+      row.player1_username,
+      row.player2_id,
+      row.player2_username,
+      row.current_player_id,
+      row.player1_score,
+      row.player2_score,
+      row.player1_round_score,
+      row.player2_round_score,
+      row.winning_score,
+      row.status,
+      row.winner_id,
+      row.created_at,
+      row.updated_at
+    );
+
     return gameState;
   }
 
   getGame(gameId: string): GameState | undefined {
-    return this.games.get(gameId);
+    const row = db
+      .prepare('SELECT * FROM games WHERE id = ?')
+      .get(gameId) as any;
+
+    if (!row) {
+      return undefined;
+    }
+
+    // Extract userId from player ID (format: player-{userId})
+    const player1UserId = row.player1_id.startsWith('player-') 
+      ? row.player1_id.replace('player-', '') 
+      : row.player1_id;
+    const player2UserId = row.player2_id.startsWith('player-')
+      ? row.player2_id.replace('player-', '')
+      : row.player2_id;
+
+    const game: GameState = {
+      id: row.id,
+      player1: {
+        id: row.player1_id.startsWith('player-') ? row.player1_id : `player-${row.player1_id}`,
+        userId: player1UserId,
+        username: row.player1_username,
+      },
+      player2: {
+        id: row.player2_id.startsWith('player-') ? row.player2_id : `player-${row.player2_id}`,
+        userId: player2UserId,
+        username: row.player2_username,
+      },
+      currentPlayerId: row.current_player_id,
+      player1Score: row.player1_score,
+      player2Score: row.player2_score,
+      player1RoundScore: row.player1_round_score,
+      player2RoundScore: row.player2_round_score,
+      winningScore: row.winning_score,
+      status: row.status as 'waiting' | 'active' | 'finished',
+      winnerId: row.winner_id || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+
+    return game;
   }
 
   getAllGames(): GameState[] {
-    return Array.from(this.games.values());
+    const rows = db.prepare('SELECT * FROM games').all() as any[];
+    return rows.map((row) => {
+      const player1UserId = row.player1_id.startsWith('player-') 
+        ? row.player1_id.replace('player-', '') 
+        : row.player1_id;
+      const player2UserId = row.player2_id.startsWith('player-')
+        ? row.player2_id.replace('player-', '')
+        : row.player2_id;
+
+      return {
+        id: row.id,
+        player1: {
+          id: row.player1_id.startsWith('player-') ? row.player1_id : `player-${row.player1_id}`,
+          userId: player1UserId,
+          username: row.player1_username,
+        },
+        player2: {
+          id: row.player2_id.startsWith('player-') ? row.player2_id : `player-${row.player2_id}`,
+          userId: player2UserId,
+          username: row.player2_username,
+        },
+        currentPlayerId: row.current_player_id,
+        player1Score: row.player1_score,
+        player2Score: row.player2_score,
+        player1RoundScore: row.player1_round_score,
+        player2RoundScore: row.player2_round_score,
+        winningScore: row.winning_score,
+        status: row.status as 'waiting' | 'active' | 'finished',
+        winnerId: row.winner_id || undefined,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    });
   }
 
   getUserGames(userId: string): GameState[] {
-    return Array.from(this.games.values()).filter(
-      game => game.player1.userId === userId || game.player2.userId === userId
+    // Search for games where userId matches either player (with or without 'player-' prefix)
+    const rows = db
+      .prepare(`
+        SELECT * FROM games 
+        WHERE player1_id = ? OR player1_id = ? OR player2_id = ? OR player2_id = ?
+      `)
+      .all(userId, `player-${userId}`, userId, `player-${userId}`) as any[];
+
+    return rows.map((row) => {
+      const player1UserId = row.player1_id.startsWith('player-') 
+        ? row.player1_id.replace('player-', '') 
+        : row.player1_id;
+      const player2UserId = row.player2_id.startsWith('player-')
+        ? row.player2_id.replace('player-', '')
+        : row.player2_id;
+
+      return {
+        id: row.id,
+        player1: {
+          id: row.player1_id.startsWith('player-') ? row.player1_id : `player-${row.player1_id}`,
+          userId: player1UserId,
+          username: row.player1_username,
+        },
+        player2: {
+          id: row.player2_id.startsWith('player-') ? row.player2_id : `player-${row.player2_id}`,
+          userId: player2UserId,
+          username: row.player2_username,
+        },
+        currentPlayerId: row.current_player_id,
+        player1Score: row.player1_score,
+        player2Score: row.player2_score,
+        player1RoundScore: row.player1_round_score,
+        player2RoundScore: row.player2_round_score,
+        winningScore: row.winning_score,
+        status: row.status as 'waiting' | 'active' | 'finished',
+        winnerId: row.winner_id || undefined,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    });
+  }
+
+  private updateGame(game: GameState): void {
+    const row = gameStateToDbRow(game);
+    const update = db.prepare(`
+      UPDATE games SET
+        current_player_id = ?,
+        player1_score = ?,
+        player2_score = ?,
+        player1_round_score = ?,
+        player2_round_score = ?,
+        winning_score = ?,
+        status = ?,
+        winner_id = ?,
+        updated_at = ?
+      WHERE id = ?
+    `);
+
+    update.run(
+      row.current_player_id,
+      row.player1_score,
+      row.player2_score,
+      row.player1_round_score,
+      row.player2_round_score,
+      row.winning_score,
+      row.status,
+      row.winner_id,
+      row.updated_at,
+      row.id
     );
   }
 
   rollDice(gameId: string, userId: string): RollDiceResponse {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
     if (!game) {
       throw new Error('Game not found');
     }
@@ -88,7 +301,7 @@ export class GameService {
     }
 
     game.updatedAt = Date.now();
-    this.games.set(gameId, game);
+    this.updateGame(game);
 
     return {
       dice,
@@ -99,7 +312,7 @@ export class GameService {
   }
 
   hold(gameId: string, userId: string): HoldResponse {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
     if (!game) {
       throw new Error('Game not found');
     }
@@ -142,7 +355,7 @@ export class GameService {
     }
 
     game.updatedAt = Date.now();
-    this.games.set(gameId, game);
+    this.updateGame(game);
 
     return {
       gameState: { ...game },
@@ -152,7 +365,7 @@ export class GameService {
   }
 
   newGame(gameId: string, userId: string, winningScore?: number): GameState {
-    const game = this.games.get(gameId);
+    const game = this.getGame(gameId);
     if (!game) {
       throw new Error('Game not found');
     }
@@ -176,16 +389,16 @@ export class GameService {
     }
 
     game.updatedAt = Date.now();
-    this.games.set(gameId, game);
+    this.updateGame(game);
 
     return { ...game };
   }
 
   deleteGame(gameId: string): boolean {
-    return this.games.delete(gameId);
+    const result = db.prepare('DELETE FROM games WHERE id = ?').run(gameId);
+    return result.changes > 0;
   }
 }
 
 // Singleton instance
 export const gameService = new GameService();
-
