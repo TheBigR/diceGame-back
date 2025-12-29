@@ -102,6 +102,10 @@ All game endpoints require authentication (Bearer token in Authorization header)
   - Body: `{ "winningScore": number (optional) }`
   - Returns: Game state object
 
+- `POST /api/games/:gameId/end` - End the game and determine winner
+  - Returns: Game state object with status 'finished' and winnerId set
+  - Determines winner based on current scores (higher score wins, or current player if tied)
+
 - `DELETE /api/games/:gameId` - Delete a game
   - Returns: `{ "message": "Game deleted successfully" }`
 

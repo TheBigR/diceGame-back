@@ -120,19 +120,38 @@ export class GameService {
       ? row.player2_id.replace('player-', '')
       : row.player2_id;
 
+    // Normalize player IDs to ensure consistent format
+    const player1Id = row.player1_id.startsWith('player-') ? row.player1_id : `player-${row.player1_id}`;
+    const player2Id = row.player2_id.startsWith('player-') ? row.player2_id : `player-${row.player2_id}`;
+
+    // Normalize currentPlayerId to match player ID format
+    let currentPlayerId = row.current_player_id;
+    if (currentPlayerId === player1UserId || currentPlayerId === `player-${player1UserId}`) {
+      currentPlayerId = player1Id;
+    } else if (currentPlayerId === player2UserId || currentPlayerId === `player-${player2UserId}`) {
+      currentPlayerId = player2Id;
+    } else if (!currentPlayerId.startsWith('player-')) {
+      // If stored as userId, convert to player ID format
+      if (currentPlayerId === player1UserId) {
+        currentPlayerId = player1Id;
+      } else if (currentPlayerId === player2UserId) {
+        currentPlayerId = player2Id;
+      }
+    }
+
     const game: GameState = {
       id: row.id,
       player1: {
-        id: row.player1_id.startsWith('player-') ? row.player1_id : `player-${row.player1_id}`,
+        id: player1Id,
         userId: player1UserId,
         username: row.player1_username,
       },
       player2: {
-        id: row.player2_id.startsWith('player-') ? row.player2_id : `player-${row.player2_id}`,
+        id: player2Id,
         userId: player2UserId,
         username: row.player2_username,
       },
-      currentPlayerId: row.current_player_id,
+      currentPlayerId,
       player1Score: row.player1_score,
       player2Score: row.player2_score,
       player1RoundScore: row.player1_round_score,
@@ -386,6 +405,47 @@ export class GameService {
     
     if (winningScore !== undefined) {
       game.winningScore = winningScore;
+    }
+
+    game.updatedAt = Date.now();
+    this.updateGame(game);
+
+    return { ...game };
+  }
+
+  endGame(gameId: string, userId: string): GameState {
+    const game = this.getGame(gameId);
+    if (!game) {
+      throw new Error('Game not found');
+    }
+
+    if (game.status !== 'active') {
+      throw new Error('Game is not active');
+    }
+
+    // Verify user is part of the game
+    if (game.player1.userId !== userId && game.player2.userId !== userId) {
+      throw new Error('You are not part of this game');
+    }
+
+    // Validate it's the current player's turn
+    const currentPlayer = game.currentPlayerId === game.player1.id ? game.player1 : game.player2;
+    if (currentPlayer.userId !== userId) {
+      throw new Error('Not your turn');
+    }
+
+    // Determine winner based on current scores
+    // Player with higher score wins, or if tied, current player wins
+    if (game.player1Score > game.player2Score) {
+      game.status = 'finished';
+      game.winnerId = game.player1.id;
+    } else if (game.player2Score > game.player1Score) {
+      game.status = 'finished';
+      game.winnerId = game.player2.id;
+    } else {
+      // Tie - current player wins (or could be a draw, but we'll pick current player)
+      game.status = 'finished';
+      game.winnerId = game.currentPlayerId;
     }
 
     game.updatedAt = Date.now();

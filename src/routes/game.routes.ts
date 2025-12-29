@@ -6,6 +6,7 @@ import {
   rollDice,
   hold,
   newGame,
+  endGame,
   deleteGame,
 } from '../controllers/game.controller';
 import { authenticate } from '../middleware/auth.middleware';
@@ -22,6 +23,7 @@ router.get('/:gameId', getGame);
 router.post('/:gameId/roll', rollDice);
 router.post('/:gameId/hold', hold);
 router.post('/:gameId/new-game', newGame);
+router.post('/:gameId/end', endGame);
 
 export default router;
 

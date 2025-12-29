@@ -150,6 +150,22 @@ export const newGame = async (req: AuthRequest, res: Response): Promise<void> =>
   }
 };
 
+export const endGame = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { gameId } = req.params;
+    const game = gameService.endGame(gameId, req.user.userId);
+
+    res.json(game);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 export const deleteGame = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
